@@ -1,10 +1,14 @@
 name "Google Cloud DNS"
 rs_ca_ver 20161221
-short_description "Google Cloud DNS plugin"
-long_description "Version: 1.0"
+short_description "Google Cloud DNS"
+long_description ""
 type 'plugin'
 package "plugins/googledns"
 import "sys_log"
+info(
+  provider: "Google",
+  service: "CloudDNS"
+)
 
 parameter "google_project" do
   type "string"
@@ -12,14 +16,30 @@ parameter "google_project" do
   allowed_pattern "^[0-9a-z:\.-]+$"
 end
 
-parameter "dns_zone" do
-  type "string"
-  label "Zone Name/ID"
-  description "The DNS Zone Name (or DNS Zone ID) to create/manage"
-  # Needed to manage DNS Records (type = resourceRecordSet)
-end 
+pagination "google_pagination" do
+  get_page_marker do
+    body_path "nextPageToken"
+  end
+  set_page_marker do
+    query "pageToken"
+  end
+end
 
 plugin "clouddns" do
+  short_description "Google Cloud DNS"
+  long_description "Supports Google Cloud DNS ManagedZones and RecordSets"
+  version "2.0.0"
+
+  documentation_link 'source' do
+    label 'Source'
+    url 'https://github.com/flexera/flexera-plugins/blob/master/google/google_cloud_dns/google_cloud_dns.rb'
+  end
+
+  documentation_link 'readme' do
+    label "ReadMe"
+    url 'https://github.com/flexera/flexera-plugins/blob/master/google/google_cloud_dns/README.md'
+  end
+
   endpoint do
     default_scheme "https"
     default_host "www.googleapis.com"
@@ -31,17 +51,10 @@ plugin "clouddns" do
     label "Project"
     description "The GCP Project to create/manage resources"
   end
-
-  parameter "managed_zone" do
-    type "string"
-    label "Zone Name/ID"
-    description "The DNS Zone Name (or DNS Zone ID) to create/manage"
-  end 
-
-
+  
   # https://cloud.google.com/dns/api/v1/managedZones
   type "managedZone" do
-    href_templates "/projects/$project/managedZones/{{id}}"
+    href_templates "{{managedZones[*].id}}"
 
     field "name" do
       required true
@@ -100,11 +113,20 @@ plugin "clouddns" do
       path "/projects/$project/managedZones"
       output_path "managedZones[]"
 
-      field "max_results" do 
+      field "max_results" do
         location "query"
         alias_for "maxResults"
       end 
+      pagination $google_pagination
     end 
+
+    polling do
+      field_values do
+        max_results '200'
+      end
+      period 60
+      action 'list'
+    end
 
     link "project" do
       path "/projects/$project"
@@ -165,8 +187,8 @@ plugin "clouddns" do
   end
 
 type "resourceRecordSet" do
-    href_templates "/projects/$project/managedZones/$managed_zone/rrsets?name={{additions[*].name}}","/projects/$project/managedZones/$managed_zone/rrsets?name={{deletions[*].name}}","/projects/$project/managedZones/$managed_zone/rrsets?name={{rrsets[*].name}}"
-
+    href_templates "{{rrsets[*].join('-', [@.name, @.rrdatas[0]])}}"
+   
     field "record" do
       type "array"
     end
@@ -204,6 +226,10 @@ type "resourceRecordSet" do
       path "/projects/$project/managedZones/$managed_zone/changes"
       output_path "additions[]"
 
+      field "managed_zone" do
+        location "path"
+      end
+
       field "record" do
         alias_for "additions"
       end
@@ -213,6 +239,10 @@ type "resourceRecordSet" do
     action "delete" do
       verb "POST"
       path "/projects/$project/managedZones/$managed_zone/changes"
+
+      field "managed_zone" do
+        location "path"
+      end
 
       field "record" do
         alias_for "deletions"
@@ -225,10 +255,14 @@ type "resourceRecordSet" do
       verb "GET"
       path "/projects/$project/managedZones/$managed_zone/rrsets"
 
-      field "max_results" do 
+      field "max_results" do
         location "query"
         alias_for "maxResults"
-      end 
+      end
+
+      field "managed_zone" do
+        location "path"
+      end
 
       field "name" do
         location "query"
@@ -238,8 +272,18 @@ type "resourceRecordSet" do
       field "type" do
         location "query"
       end
+      pagination $google_pagination
+    end
 
-    end 
+    polling do
+      field_values do
+        managed_zone parent_field('name')
+        max_results '200'
+      end
+      parent "managedZone"
+      period 60
+      action 'list'
+    end
 
     action "get" do 
       verb "GET"
@@ -271,7 +315,6 @@ resource_pool "clouddns" do
   plugin $clouddns
   parameter_values do
     project $google_project
-    managed_zone $dns_zone
   end
   auth "my_google_auth", type: "oauth2" do
     token_url "https://www.googleapis.com/oauth2/v4/token"
@@ -381,4 +424,3 @@ define stop_debugging() do
     $$debugging = false
   end
 end
-
