@@ -1,7 +1,7 @@
 name 'rds test CAT'
 rs_ca_ver 20161221
 short_description "Amazon Web Services - Relational Database Service"
-import "plugins/rs_aws_rds"
+import "plugins/flexera_aws_rds"
 
 
 output "rds_endpoint" do
@@ -33,7 +33,7 @@ parameter "db_href" do
 end
 
 #FROM Snapshot:
-#resource "my_rds", type: "rs_aws_rds.db_instance" do
+#resource "my_rds", type: "flexera_aws_rds.db_instance" do
 #  availability_zone "us-east-1a"
 #  db_instance_class "db.t2.small"
 #  db_instance_identifier join(["my-rds-", last(split(@@deployment.href, "/"))])
@@ -43,7 +43,7 @@ end
 #end
 
 #New Instance:
-resource "my_rds", type: "rs_aws_rds.db_instance" do
+resource "my_rds", type: "flexera_aws_rds.db_instance" do
   allocated_storage "10"
   availability_zone "us-east-1a"
   db_instance_class "db.t2.small"
@@ -74,7 +74,7 @@ operation "list_db_instances" do
 end
 
 define list_db_instances() return $object do
-  @rds = rs_aws_rds.db_instance.list()
+  @rds = flexera_aws_rds.db_instance.list()
 
   $object = to_object(@rds)
 
@@ -89,7 +89,7 @@ operation "get_db" do
 end
 
 define get_db($db_href) return $object do
-  @rds = rs_aws_rds.db_instance.get(href: $db_href)
+  @rds = flexera_aws_rds.db_instance.get(href: $db_href)
     $object = to_object(@rds)
 
   $object = to_s($object)
@@ -103,7 +103,7 @@ operation "check_if_empty" do
 end
 
 define check_if_empty($db_href) return $value do
-    @rds = rs_aws_rds.db_instance.get(href: $db_href)
+    @rds = flexera_aws_rds.db_instance.get(href: $db_href)
     if empty?(@rds)
       $value = "EMPTY!"
     else 

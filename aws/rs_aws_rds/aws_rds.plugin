@@ -1,20 +1,66 @@
-name 'aws_rds_plugin'
+name 'Amazon RDS'
 type 'plugin'
 rs_ca_ver 20161221
 short_description "Amazon Web Services - Relational Database Service"
-long_description "Version: 1.5"
-package "plugins/rs_aws_rds"
+long_description ""
+package "plugins/flexera_aws_rds"
 import "sys_log"
 import "plugin_generics"
+info(
+  provider: "AWS",
+  service: "RDS",
+)
 
-plugin "rs_aws_rds" do
-  endpoint do
-    default_scheme "https"
-    path "/"
-    query do {
-      "Version" => "2014-10-31"
-    } end
+pagination "rds_pagination" do
+  get_page_marker do
+    body_path "DescribeDBInstancesResult.NextMarker"
   end
+  set_page_marker do
+    query "Marker"
+  end
+end
+
+plugin "flexera_aws_rds" do
+
+  short_description 'Amazon Web Services - Relational Database Service'
+  long_description 'Supports AWS RDS instances'
+  version '2.0.0'
+
+  documentation_link 'source' do
+    label 'Source'
+    url 'https://github.com/flexera/flexera-plugins/blob/master/aws/rs_aws_rds/aws_rds.plugin'
+  end
+
+  documentation_link 'readme' do
+    label 'readme'
+    url 'https://github.com/flexera/flexera-plugins/blob/master/aws/rs_aws_rds/README.md'
+  end
+
+  parameter 'region' do
+    type 'string'
+    label 'AWS Region'
+    default 'us-east-1'
+    allowed_values "us-east-1","us-east-2","us-west-1","us-west-2","ap-south-1","ap-northeast-2","ap-southeast-1","ap-southeast-2","ap-northeast-1","ca-central-1","eu-central-1","eu-west-1","eu-west-2","eu-west-3", "sa-east-1","eu-north-1"	
+    description 'The region in which the resources are created'
+  end
+
+  parameter 'page_size' do
+    type 'string'
+    label 'Page size for AWS responses'
+    default '100'
+    description 'The maximum results count for each page of AWS data received.'
+  end
+
+   endpoint do
+    default_host 'rds.$region.amazonaws.com'
+    default_scheme 'https'
+    path '/'
+    query do {
+      'Version' => '2014-10-31'
+    } end
+    request_content_type 'application/x-www-form-urlencoded; charset=utf-8'
+  end  
+
 
   type "db_instance" do
     href_templates "/?Action=DescribeDBInstances&DBInstanceIdentifier={{//CreateDBInstanceResult/DBInstance/DBInstanceIdentifier}}","/?Action=DescribeDBInstances&DBInstanceIdentifier={{//RestoreDBInstanceFromDBSnapshotResult/DBInstance/DBInstanceIdentifier}}","/?Action=DescribeDBInstances&DBInstanceIdentifier={{//DescribeDBInstancesResult/DBInstances/DBInstance/DBInstanceIdentifier}}"
@@ -329,7 +375,23 @@ plugin "rs_aws_rds" do
 
     output_path "//DBInstance"
 
-    output "BackupRetentionPeriod","MultiAZ","DBInstanceStatus","DBInstanceIdentifier","PreferredBackupWindow","PreferredMaintenanceWindow","AvailabilityZone","LatestRestorableTime","Engine","LicenseModel","PubliclyAccessible","DBName","AutoMinorVersionUpgrade","InstanceCreateTime","AllocatedStorage","MasterUsername","DBInstanceClass"
+    output "BackupRetentionPeriod","MultiAZ","DBInstanceStatus","DBInstanceIdentifier","PreferredBackupWindow","PreferredMaintenanceWindow","AvailabilityZone","LatestRestorableTime","Engine","LicenseModel","PubliclyAccessible","DBName","AutoMinorVersionUpgrade","InstanceCreateTime","AllocatedStorage","MasterUsername","DBInstanceClass","tags"
+
+    output 'id' do
+     body_path 'DBInstanceIdentifier'
+    end
+
+    output 'name' do
+     body_path 'DBName'
+    end
+
+    output 'region' do
+     body_path 'substring(AvailabilityZone,0, string-length(AvailabilityZone))'
+    end
+
+    output 'state' do
+      body_path 'DBInstanceStatus'
+    end
 
     output "endpoint_address" do
       body_path "Endpoint/Address"
@@ -512,8 +574,7 @@ plugin "rs_aws_rds" do
         alias_for "Tags.member.6.Key"
         location "query"
       end 
-
-
+	  
     end
 
     action "destroy" do
@@ -540,6 +601,12 @@ plugin "rs_aws_rds" do
     action "list" do
       verb "POST"
       path "/?Action=DescribeDBInstances"
+      field "page_size" do
+          type 'string'
+        location 'query'
+        alias_for 'MaxRecords'
+      end
+     pagination $rds_pagination	  
     end
 
     action "stop" do
@@ -561,11 +628,19 @@ plugin "rs_aws_rds" do
       verb "POST"
       path "$href?Action=RebootDBInstance"
     end 
+	
+    polling do
+      field_values do
+       page_size $page_size	  
+      end
+       period 60
+       action 'list'
+    end		
 
     provision 'provision_db_instance'
     
     delete    'delete_db_instance'
-  end 
+  end  
 
  
   type "security_groups" do
@@ -584,7 +659,17 @@ plugin "rs_aws_rds" do
     end
  
     output_path "//DBSecurityGroup"
- 
+	
+    output "tags","region", "state"
+	
+    output 'id' do
+     body_path 'OwnerId'
+    end
+
+    output 'name' do
+     body_path 'DBSecurityGroupName'
+    end
+
     output 'DBSecurityGroupDescription' do
       body_path "DBSecurityGroupDescription"
       type "simple_element"
@@ -618,8 +703,21 @@ plugin "rs_aws_rds" do
     action "list" do
       verb "POST"
       path "/?Action=DescribeDBSecurityGroups"
+       field "page_size" do
+          type 'string'
+        location 'query'
+        alias_for 'MaxRecords'
+      end
+     pagination $rds_pagination		  
     end
 
+    polling do
+      field_values do
+       page_size $page_size	  
+      end
+       period 60
+       action 'list'
+    end	
     provision "provision_sg"
 
     delete    "delete_sg"
@@ -698,7 +796,7 @@ plugin "rs_aws_rds" do
 end
 
 resource_pool "rds" do
-  plugin $rs_aws_rds
+  plugin $flexera_aws_rds
   host "rds.us-east-1.amazonaws.com"
   auth "key", type: "aws" do
     version     4
@@ -715,9 +813,9 @@ define provision_db_instance(@declaration) return @db_instance do
     $object = to_object(@declaration)
     $fields = $object["fields"]
     if $fields["db_snapshot_identifier"] != null 
-      @db_instance = rs_aws_rds.db_instance.create_from_snapshot($fields)
+      @db_instance = flexera_aws_rds.db_instance.create_from_snapshot($fields)
     else
-      @db_instance = rs_aws_rds.db_instance.create($fields)
+      @db_instance = flexera_aws_rds.db_instance.create($fields)
     end
     sub on_error: skip do
       sleep_until(@db_instance.DBInstanceStatus == "available")
@@ -757,7 +855,7 @@ define provision_sg(@declaration) return @sec_group do
     call plugin_generics.start_debugging()
     $object = to_object(@declaration)
     $fields = $object["fields"]
-    @sec_group = rs_aws_rds.security_groups.create($fields)
+    @sec_group = flexera_aws_rds.security_groups.create($fields)
     @sec_group = @sec_group.get()
     call plugin_generics.stop_debugging()
   end
@@ -774,7 +872,7 @@ end
 define provision_db_subnet_group(@declaration) return @db_subnet_group do
   $object = to_object(@declaration)
   $fields = $object["fields"]
-  @db_subnet_group = rs_aws_rds.db_subnet_groups.create($fields)
+  @db_subnet_group = flexera_aws_rds.db_subnet_groups.create($fields)
   @db_subnet_group = @db_subnet_group.get()
 end
 
