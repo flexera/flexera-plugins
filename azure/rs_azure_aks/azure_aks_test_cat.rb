@@ -2,10 +2,10 @@ name 'Azure AKS Service - Kubernetes Test CAT'
 rs_ca_ver 20161221
 short_description "Azure AKS Service  - Kubernetes Test CAT"
 import "sys_log"
-import "plugins/rs_azure_aks"
+import "azure_aks"
 
 parameter "subscription_id" do
-  like $rs_azure_aks.subscription_id
+  like $azure_aks.subscription_id
   default "8beb7791-9302-4ae4-97b4-afd482aadc59"
 end
 
@@ -21,11 +21,12 @@ resource "my_resource_group", type: "rs_cm.resource_group" do
 end
 
  
-resource "my_k8s", type: "rs_azure_aks.aks" do
+resource "my_k8s", type: "azure_aks.managedClusters" do
   name join(["aks", last(split(@@deployment.href, "/"))])
   resource_group @my_resource_group.name
   location "Central US"
   properties do {
+  "kubernetesVersion" => "1.15.7",
   "dnsPrefix" => join(["dnsprefix-", last(split(@@deployment.href, "/"))]),
    "orchestratorProfile" => {
       "orchestratorType" =>  "Kubernetes"
@@ -34,21 +35,33 @@ resource "my_k8s", type: "rs_azure_aks.aks" do
       "clientId" => cred("AZURE_APPLICATION_ID"),
       "secret" => cred("AZURE_APPLICATION_KEY")
     },
- 
     "agentPoolProfiles" =>  [
       {
         "name" =>  "agentpools",
-        "count" =>  2,
+        "count" =>  3,
         "vmSize" =>  "Standard_DS2",
         "dnsPrefix" => join(["dnsprefix-", last(split(@@deployment.href, "/"))]),
-        "storageProfile" => 'ManagedDisks',
+        "type": "VirtualMachineScaleSets",
         "osType" => 'Linux'
       }
     ],
     "diagnosticsProfile" => {
       "vmDiagnostics" => {
-          "enabled" =>  "false"
+          "enabled" =>  "true"
       }
+    },
+    "networkProfile": {
+      "loadBalancerSku": "standard",
+      "outboundType": "loadBalancer",
+      "loadBalancerProfile": {
+        "managedOutboundIPs": {
+          "count": 2
+        }
+      }
+    },
+    "autoScalerProfile": {
+      "scan-interval": "20s",
+      "scale-down-delay-after-add": "15m"
     },
     "linuxProfile" => {
       "adminUsername" =>  "azureuser",
@@ -63,16 +76,41 @@ resource "my_k8s", type: "rs_azure_aks.aks" do
   } end
 end
 
+resource "my_agent_pool", type: "azure_aks.agentPools" do
+  name "nodepool1"
+  resource_group @my_resource_group.name
+  cluster_name @my_k8s.name
+  location "Central US"
+  properties do {
+    "count" =>  3,
+    "vmSize" =>  "Standard_DS2",
+    "type": "VirtualMachineScaleSets",
+    "osType" => 'Linux'
+  } end
+end
+
 operation "launch" do
  description "Launch the application"
  definition "launch_handler"
 end
 
-define launch_handler(@my_resource_group,@my_k8s) return @my_resource_group,@my_k8s do
+operation "terminate" do
+  description "terminate"
+  definition "terminate_handler"
+end
+
+define launch_handler(@my_resource_group,@my_k8s,@my_agent_pool) return @my_resource_group,@my_k8s,@my_agent_pool do
   call start_debugging()
   provision(@my_resource_group)
   provision(@my_k8s)
+  provision(@my_agent_pool)
   call stop_debugging()
+end
+
+define terminate_handler(@my_agent_pool,@my_k8s,@my_resource_group) return @my_resource_group,@my_k8s,@my_agent_pool do
+  delete(@my_agent_pool)
+  delete(@my_k8s)
+  delete(@my_resource_group)
 end
 
 define start_debugging() do
