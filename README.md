@@ -38,6 +38,7 @@ This repository contains the library of open source Flexera CMP plugins.
 - [Azure CosmosDB](./azure/rs_azure_cosmosdb/)
 - [Azure AKS](./azure/rs_azure_aks/)
 - [Azure Databricks](./azure/rs_azure_databricks/)
+- [Azure Blob Services](./azure/rs_azure_blob_service/)
 
 ### Google Cloud Platform
 
