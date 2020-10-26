@@ -1,0 +1,53 @@
+
+name "Kubernetes"
+rs_pt_ver 20180301
+type "policy"
+short_description "Kubernetes Tests"
+long_description ""
+severity "low"
+category "Cost"
+info(
+  version: "2.0",
+  provider: "AWS",
+  service: "EC2",
+  policy_set: ""
+)
+
+parameter "param_email" do
+  type "list"
+  label "Email addresses to notify"
+  description "Email addresses of the recipients you wish to notify when new incidents are created"
+end
+
+credentials "kube" do
+  schemes "api_key"
+  label "API Key"
+  description "Select the API Key"
+  tags "provider=kube"
+end
+
+datasource "ds_pods" do
+  request do
+    verb "GET"
+    insecure true
+    auth $kube
+    host "A00ED3FE6156680F294E96F3B772658A.gr7.us-east-1.eks.amazonaws.com"
+    path "/api/v1/namespaces/default/pods/"
+  end
+end
+
+policy "pol_utilization" do
+  validate_each $ds_pods do
+    summary_template "{{ rs_project_name }} (Account ID: {{ rs_project_id }}): {{ len data }} AWS instances running longer than {{ parameters.param_days_old}} days"
+    detail_template <<-EOS
+___
+###### Policy Applied in Account: {{ rs_project_name }} (Account ID: {{ rs_project_id }}) within Org: {{ rs_org_name }} (Org ID: {{ rs_org_id }})
+EOS
+    escalate $email
+    check eq(0,1)
+  end
+end
+
+escalation "email" do
+  email $param_email
+end
