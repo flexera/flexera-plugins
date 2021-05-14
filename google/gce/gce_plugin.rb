@@ -1,19 +1,54 @@
-name "Google Compute Engine"
+name "Google Compute Engine (GCE)"
 rs_ca_ver 20161221
-short_description "Google Compute Engine plugin"
-long_description "Version: 1.0"
+short_description "Google Compute Engine (GCE)"
+long_description ""
 type 'plugin'
 package "plugins/gce"
 import "sys_log"
+info(
+      provider: "Google",
+      service: "Compute"
+    )
 
 parameter "gce_project" do
   type "string"
   label "GCE Project"
   category "GCE Plugin"
-  allowed_pattern "^[0-9a-z:\.-]+$"
+end
+
+pagination "google_pagination" do
+  get_page_marker do
+    body_path ".nextPageToken"
+  end
+  set_page_marker do
+    query "pageToken"
+  end
 end
 
 plugin "gce" do
+
+  short_description 'Google Compute Engine (GCE) plugin'
+  long_description 'Plugin support for Google Compute Engine (GCE) compute resources.'
+  version '2.0.0'
+  json_query_language 'jq'  
+
+  documentation_link 'source' do
+    label 'Source'
+    url 'https://github.com/flexera/flexera-plugins/blob/master/google/gce/gce_plugin.rb'
+  end
+
+  documentation_link 'readme' do
+    label 'Readme'
+    url 'https://github.com/flexera/flexera-plugins/blob/master/google/gce/README.md'
+  end
+
+  parameter 'page_size' do
+    type 'string'
+    label 'Page size for google responses'
+    default '200'
+    description 'The maximum results count for each page of google data received.'
+  end
+
   endpoint do
     default_scheme "https"
     default_host "www.googleapis.com"
@@ -28,7 +63,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/addresses.
   type "address" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}","{{items.*.addresses[].selfLink}}"
+    href_templates "{{.id}}","{{.items| .[].id}}","{{.items | .[].addresses // [] | .[].id}}"
 
     field "region" do
       location "path"
@@ -49,43 +84,82 @@ plugin "gce" do
       type "string"
     end
 
-    output "address","creationTimestamp","description","id","kind","name","region","selfLink","status","users"
+    output "address","creationTimestamp","description","kind","selfLink","users"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+      body_path '.region /"/" | .[8]'
+    end
+
+    output 'state' do
+	 body_path '.status'
+    end
+
+    output 'tags' do
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/addresses/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/addresses"
       type "address"
-      output_path "items.*.addresses[]"
+      output_path ".items | .[].addresses // [] | .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/addresses/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/addresses/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "address"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/addresses/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/addresses"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/addresses/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/addresses"
       type "address"
       output_path "items"
+          field "page_size" do
+          type 'string'
+        location 'query'
+        alias_for 'maxResults'
+      end
+     pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'aggregatedList'
     end
 
     link "region" do
@@ -128,7 +202,7 @@ plugin "gce" do
     output "autoscalingPolicy","creationTimestamp","description","id","kind","name","region","selfLink","target","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/autoscalers/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/autoscalers"
       type "autoscaler"
@@ -136,28 +210,28 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/autoscalers/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/autoscalers/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "autoscaler"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/autoscalers/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/zones/$zone/autoscalers"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/autoscalers/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones/$zone/autoscalers"
       type "autoscaler"
@@ -165,14 +239,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/autoscalers/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "/projects/$project/zones/$zone/autoscalers"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/autoscalers/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "/projects/$project/zones/$zone/autoscalers"
       type "operation"
@@ -221,28 +295,28 @@ plugin "gce" do
     output "bucketName","creationTimestamp","description","enableCdn","id","kind","name","selfLink"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendBuckets/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendBuckets/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "backendBucket"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendBuckets/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/backendBuckets"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendBuckets/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/backendBuckets"
       type "backendBucket"
@@ -250,14 +324,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendBuckets/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendBuckets/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "$href"
       type "operation"
@@ -271,7 +345,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices.
   type "backendService" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}","{{items.*.backendServices[].selfLink}}"
+    href_templates "{{.id}}","{{.items | .[].id}}","{{.items | .[].backendServices // [] | .[].id}}"
 
     field "affinityCookieTtlSec" do
       type "number"
@@ -333,61 +407,93 @@ plugin "gce" do
       type "number"
     end
 
-    output "affinityCookieTtlSec","backends","cdnPolicy","connectionDraining","creationTimestamp","description","enableCDN","fingerprint","healthChecks","id","kind","loadBalancingScheme","name","port","portName","protocol","region","selfLink","sessionAffinity","timeoutSec"
+    output "affinityCookieTtlSec","backends","cdnPolicy","connectionDraining","creationTimestamp","description","enableCDN","fingerprint","healthChecks","kind","loadBalancingScheme","port","portName","protocol","selfLink","sessionAffinity","timeoutSec"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+      body_path '.region /"/" | .[8]'
+    end
+
+    output 'state' do
+    end
+
+    output 'tags' do
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/backendServices"
       type "backendService"
-      output_path "items.*.backendServices[]"
+      output_path ".items | .[].backendServices // [] | .[]"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "backendService"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices/getHealth.
-    action "getHealth" do 
+    action "getHealth" do
       verb "POST"
       path "$href/getHealth"
       type "backendServiceGroupHealth"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/backendServices"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/backendServices"
       type "backendService"
-      output_path "items"
+      output_path ".items | .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'list'
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/backendServices/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "$href"
       type "operation"
@@ -411,7 +517,7 @@ plugin "gce" do
     output "creationTimestamp","defaultDiskSizeGb","deprecated","description","id","kind","name","selfLink","validDiskSize","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/diskTypes/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/diskTypes"
       type "diskType"
@@ -419,14 +525,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/diskTypes/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "diskType"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/diskTypes/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones/$zone/diskTypes"
       type "diskType"
@@ -446,7 +552,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/disks.
   type "disk" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}","{{items.*.disks[].selfLink}}"
+    href_templates "{{.id}}","{{.items | .[].id}}","{{.items | .[].disks // [] | .[].id}}"
 
     field "zone" do
       location "path"
@@ -500,54 +606,93 @@ plugin "gce" do
       type "string"
     end
 
-    output "creationTimestamp","description","diskEncryptionKey","id","kind","lastAttachTimestamp","lastDetachTimestamp","licenses","name","options","selfLink","sizeGb","sourceImage","sourceImageEncryptionKey","sourceImageId","sourceSnapshot","sourceSnapshotEncryptionKey","sourceSnapshotId","status","type","users","zone"
+    output "creationTimestamp","description","diskEncryptionKey","kind","lastAttachTimestamp","lastDetachTimestamp","licenses","options","selfLink","sizeGb","sourceImage","sourceImageEncryptionKey","sourceImageId","sourceSnapshot","sourceSnapshotEncryptionKey","sourceSnapshotId","type","users"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+      body_path '.zone /"/" | .[8] [:-2]'
+    end
+
+    output 'state' do
+      body_path '.status'
+    end
+
+    output 'tags' do
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/disks/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/disks"
       type "disk"
-      output_path "items.*.disks[]"
+      output_path ".items | .[].disks // [] | .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/disks/createSnapshot.
-    action "createSnapshot" do 
+    action "createSnapshot" do
       verb "POST"
       path "$href/createSnapshot"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/disks/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/disks/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "disk"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/disks/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/zones/$zone/disks"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/disks/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones/$zone/disks"
       type "disk"
       output_path "items"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'aggregatedList'
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/disks/resize.
-    action "resize" do 
+    action "resize" do
       verb "POST"
       path "$href/resize"
       type "operation"
@@ -604,28 +749,28 @@ plugin "gce" do
     output "allowed","creationTimestamp","description","id","kind","name","network","selfLink","sourceRanges","sourceTags","targetTags"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/firewalls/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/firewalls/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "firewall"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/firewalls/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/firewalls"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/firewalls/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/firewalls"
       type "firewall"
@@ -633,14 +778,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/firewalls/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/firewalls/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "$href"
       type "operation"
@@ -716,7 +861,7 @@ plugin "gce" do
     output "IPAddress","IPProtocol","backendService","creationTimestamp","description","id","kind","loadBalancingScheme","name","network","portRange","ports","region","selfLink","subnetwork","target"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/forwardingRules/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/forwardingRules"
       type "forwardingRule"
@@ -724,28 +869,28 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/forwardingRules/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/forwardingRules/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "forwardingRule"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/forwardingRules/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/forwardingRules"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/forwardingRules/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/forwardingRules"
       type "forwardingRule"
@@ -753,7 +898,7 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/forwardingRules/setTarget.
-    action "setTarget" do 
+    action "setTarget" do
       verb "POST"
       path "$href/setTarget"
       type "operation"
@@ -787,14 +932,14 @@ plugin "gce" do
     output "address","creationTimestamp","description","id","kind","name","region","selfLink","status","users"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalAddresses/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/addresses"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalAddresses/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/addresses"
       type "address"
@@ -813,96 +958,128 @@ plugin "gce" do
   end
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalForwardingRules.
-  type "globalForwardingRule" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}"
-
-    field "ipAddress" do
-      alias_for "IPAddress"
-      type "string"
-    end
-
-    field "ipProtocol" do
-      alias_for "IPProtocol"
-      type "string"
-    end
-
-    field "backendService" do
-      type "string"
-    end
-
-    field "description" do
-      type "string"
-    end
-
-    field "loadBalancingScheme" do
-      type "string"
-    end
-
-    field "name" do
-      type "string"
-    end
-
-    field "network" do
-      type "string"
-    end
-
-    field "portRange" do
-      type "string"
-    end
-
-    field "ports" do
-      type "array"
-    end
-
-    field "subnetwork" do
-      type "string"
-    end
-
-    field "target" do
-      type "string"
-    end
-
-    output "IPAddress","IPProtocol","backendService","creationTimestamp","description","id","kind","loadBalancingScheme","name","network","portRange","ports","region","selfLink","subnetwork","target"
-
-    # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalForwardingRules/get.
-    action "get" do 
-      verb "GET"
-      path "$href"
-      type "forwardingRule"
-    end
-
-    # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalForwardingRules/insert.
-    action "insert" do 
-      verb "POST"
-      path "/projects/$project/global/forwardingRules"
-      type "operation"
-    end
-
-    # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalForwardingRules/list.
-    action "list" do 
-      verb "GET"
-      path "/projects/$project/global/forwardingRules"
-      type "forwardingRule"
-      output_path "items"
-    end
-
-    link "region" do
-      url "$region"
-      type "region"
-    end
-
-    provision "provision_resource"
-
-    delete "delete_resource"
-
-  end
+  # type "globalForwardingRule" do
+  #   href_templates "{{id}}","{{items[*].id}}"
+  #
+  #   field "ipAddress" do
+  #     alias_for "IPAddress"
+  #     type "string"
+  #   end
+  #
+  #   field "ipProtocol" do
+  #     alias_for "IPProtocol"
+  #     type "string"
+  #   end
+  #
+  #   field "backendService" do
+  #     type "string"
+  #   end
+  #
+  #   field "description" do
+  #     type "string"
+  #   end
+  #
+  #   field "loadBalancingScheme" do
+  #     type "string"
+  #   end
+  #
+  #   field "name" do
+  #     type "string"
+  #   end
+  #
+  #   field "network" do
+  #     type "string"
+  #   end
+  #
+  #   field "portRange" do
+  #     type "string"
+  #   end
+  #
+  #   field "ports" do
+  #     type "array"
+  #   end
+  #
+  #   field "subnetwork" do
+  #     type "string"
+  #   end
+  #
+  #   field "target" do
+  #     type "string"
+  #   end
+  #
+  #   output "IPAddress","IPProtocol","backendService","creationTimestamp","description","kind","loadBalancingScheme","network","portRange","ports","selfLink","subnetwork","target"
+  #
+  #   output 'id' do
+  #    body_path 'id'
+  #   end
+  #
+  #   output 'name' do
+	#   body_path 'name'
+  #   end
+  #
+  #   output 'region' do
+  #     body_path 'region'
+  #   end
+  #
+  #   output 'state' do
+  #   end
+  #
+  #   output 'tags' do
+  #   end
+  #
+  #   # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalForwardingRules/get.
+  #   action "get" do
+  #     verb "GET"
+  #     path "$href"
+  #     type "forwardingRule"
+  #   end
+  #
+  #   # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalForwardingRules/insert.
+  #   action "insert" do
+  #     verb "POST"
+  #     path "/projects/$project/global/forwardingRules"
+  #     type "operation"
+  #   end
+  #
+  #   # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalForwardingRules/list.
+  #   action "list" do
+  #     verb "GET"
+  #     path "/projects/$project/global/forwardingRules"
+  #     type "forwardingRule"
+  #     output_path "items"
+  #     field "page_size" do
+  #         type 'string'
+  #         location 'query'
+  #         alias_for 'maxResults'
+  #     end
+  #     pagination $google_pagination
+  #   end
+  #
+  #   polling do
+  #     field_values do
+  #     page_size $page_size
+  #   end
+  #     period 60
+  #     action 'list'
+  #   end
+  #
+  #   link "region" do
+  #     url "$region"
+  #     type "region"
+  #   end
+  #
+  #   provision "provision_resource"
+  #
+  #   delete "delete_resource"
+  #
+  # end
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalOperations.
   type "globalOperation" do
     output "clientOperationId","creationTimestamp","description","endTime","error","httpErrorMessage","httpErrorStatusCode","id","insertTime","kind","name","operationType","progress","region","selfLink","startTime","status","statusMessage","targetId","targetLink","user","warnings","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalOperations/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "$href/operations"
       type "operation"
@@ -910,7 +1087,7 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalOperations/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "$href/operations"
       type "operation"
@@ -935,7 +1112,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/healthChecks.
   type "healthCheck" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}"
+    href_templates "{{.id}}","{{.items | .[].id}}"
 
     field "checkIntervalSec" do
       type "number"
@@ -985,46 +1162,78 @@ plugin "gce" do
       type "number"
     end
 
-    output "checkIntervalSec","creationTimestamp","description","healthyThreshold","httpHealthCheck","httpsHealthCheck","id","kind","name","selfLink","sslHealthCheck","tcpHealthCheck","timeoutSec","type","unhealthyThreshold"
+    output "checkIntervalSec","creationTimestamp","description","healthyThreshold","httpHealthCheck","httpsHealthCheck","kind","selfLink","sslHealthCheck","tcpHealthCheck","timeoutSec","type","unhealthyThreshold"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+	  body_path '.selfLink /"/" | .[7]'	
+    end
+
+    output 'state' do
+    end
+
+    output 'tags' do
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/healthChecks/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/healthChecks/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "healthCheck"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/healthChecks/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/healthChecks"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/healthChecks/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/healthChecks"
       type "healthCheck"
-      output_path "items"
+      output_path ".items | .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'list'
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/healthChecks/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/healthChecks/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "$href"
       type "operation"
@@ -1079,28 +1288,28 @@ plugin "gce" do
     output "checkIntervalSec","creationTimestamp","description","healthyThreshold","host","id","kind","name","port","requestPath","selfLink","timeoutSec","unhealthyThreshold"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpHealthChecks/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpHealthChecks/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "httpHealthCheck"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpHealthChecks/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/httpHealthChecks"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpHealthChecks/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/httpHealthChecks"
       type "httpHealthCheck"
@@ -1108,14 +1317,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpHealthChecks/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpHealthChecks/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "$href"
       type "operation"
@@ -1174,28 +1383,28 @@ plugin "gce" do
     output "checkIntervalSec","creationTimestamp","description","healthyThreshold","host","id","kind","name","port","requestPath","selfLink","timeoutSec","unhealthyThreshold"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpsHealthChecks/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpsHealthChecks/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "httpsHealthCheck"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpsHealthChecks/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/httpsHealthChecks"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpsHealthChecks/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/httpsHealthChecks"
       type "httpsHealthCheck"
@@ -1203,14 +1412,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpsHealthChecks/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/httpsHealthChecks/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "$href"
       type "operation"
@@ -1224,7 +1433,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/images.
   type "image" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}"
+    href_templates "{{.id}}","{{.items| .[].id}}"
 
     field "archiveSizeBytes" do
       type "number"
@@ -1283,49 +1492,82 @@ plugin "gce" do
       type "string"
     end
 
-    output "archiveSizeBytes","creationTimestamp","deprecated","description","diskSizeGb","family","guestOsFeatures","id","imageEncryptionKey","kind","licenses","name","rawDisk","selfLink","sourceDisk","sourceDiskEncryptionKey","sourceDiskId","sourceType","status"
+    output "archiveSizeBytes","creationTimestamp","deprecated","description","diskSizeGb","family","guestOsFeatures","imageEncryptionKey","kind","licenses","rawDisk","selfLink","sourceDisk","sourceDiskEncryptionKey","sourceDiskId","sourceType","status"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+	  body_path '.selfLink /"/" | .[7]'	
+    end
+
+    output 'state' do
+	  body_path '.status'	
+    end
+
+    output 'tags' do
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/images/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/images/deprecate.
-    action "deprecate" do 
+    action "deprecate" do
       verb "POST"
       path "$href/deprecate"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/images/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "image"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/images/getFromFamily.
-    action "getFromFamily" do 
+    action "getFromFamily" do
       verb "GET"
       path "$href/$family"
       type "image"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/images/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/images"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/images/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/images"
       type "image"
-      output_path "items"
+      output_path ".items| .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'list'
     end
 
     provision "provision_resource"
@@ -1378,14 +1620,14 @@ plugin "gce" do
     output "baseInstanceName","creationTimestamp","currentActions","description","fingerprint","id","instanceGroup","instanceTemplate","kind","name","namedPorts","region","selfLink","targetPools","targetSize","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/abandonInstances.
-    action "abandonInstances" do 
+    action "abandonInstances" do
       verb "POST"
       path "$href/abandonInstances"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/instanceGroupManagers"
       type "instanceGroupManager"
@@ -1393,35 +1635,35 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/deleteInstances.
-    action "deleteInstances" do 
+    action "deleteInstances" do
       verb "POST"
       path "$href/deleteInstances"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "instanceGroupManager"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/zones/$zone/instanceGroupManagers"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones/$zone/instanceGroupManagers"
       type "instanceGroupManager"
@@ -1429,28 +1671,28 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/recreateInstances.
-    action "recreateInstances" do 
+    action "recreateInstances" do
       verb "POST"
       path "$href/recreateInstances"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/resize.
-    action "resize" do 
+    action "resize" do
       verb "POST"
       path "$href/resize"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/setInstanceTemplate.
-    action "setInstanceTemplate" do 
+    action "setInstanceTemplate" do
       verb "POST"
       path "$href/setInstanceTemplate"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroupManagers/setTargetPools.
-    action "setTargetPools" do 
+    action "setTargetPools" do
       verb "POST"
       path "$href/setTargetPools"
       type "operation"
@@ -1484,7 +1726,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups.
   type "instanceGroup" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}","{{items.*.instanceGroups[].selfLink}}"
+    href_templates "{{.id}}","{{.items| .[].id}}","{{.items | .[].instanceGroups // [] | .[].id}}"
 
     field "zone" do
       location "path"
@@ -1516,68 +1758,106 @@ plugin "gce" do
       type "string"
     end
 
-    output "creationTimestamp","description","fingerprint","id","kind","name","namedPorts","network","region","selfLink","size","subnetwork","zone"
+    output "creationTimestamp","description","fingerprint","kind","namedPorts","network","selfLink","size","subnetwork","zone"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+      body_path '.region /"/" | .[8]'
+    end
+
+    output 'state' do
+    end
+
+    output 'tags' do
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/addInstances.
-    action "addInstances" do 
+    action "addInstances" do
       verb "POST"
       path "$href/addInstances"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/instanceGroups"
       type "instanceGroup"
-      output_path "items.*.instanceGroups[]"
+      output_path ".items | .[].instanceGroups // [] | .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "instanceGroup"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/zones/$zone/instanceGroups"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones/$zone/instanceGroups"
       type "instanceGroup"
       output_path "items"
+        field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'aggregatedList'
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/listInstances.
-    action "listInstances" do 
+    action "listInstances" do
       verb "POST"
       path "$href/listInstances"
       type "instanceGroupsListInstances"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/removeInstances.
-    action "removeInstances" do 
+    action "removeInstances" do
       verb "POST"
       path "$href/removeInstances"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceGroups/setNamedPorts.
-    action "setNamedPorts" do 
+    action "setNamedPorts" do
       verb "POST"
       path "$href/setNamedPorts"
       type "operation"
@@ -1629,28 +1909,28 @@ plugin "gce" do
     output "creationTimestamp","description","id","kind","name","properties","selfLink"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceTemplates/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceTemplates/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "instanceTemplate"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceTemplates/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/instanceTemplates"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instanceTemplates/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/instanceTemplates"
       type "instanceTemplate"
@@ -1665,7 +1945,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances.
   type "instance" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}","{{items.*.instances[].selfLink}}"
+    href_templates "{{.id}}","{{.items| .id}}","{{.items | .[].instances // [] | .[].id}}"
 
     field "zone" do
       location "path"
@@ -1715,39 +1995,65 @@ plugin "gce" do
       type "object"
     end
 
-    output "canIpForward","cpuPlatform","creationTimestamp","description","disks","id","kind","machineType","metadata","name","networkInterfaces","scheduling","selfLink","serviceAccounts","status","statusMessage","tags","zone"
+    output "canIpForward","cpuPlatform","creationTimestamp","description","disks","kind","machineType","metadata","networkInterfaces","scheduling","selfLink","serviceAccounts","statusMessage"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+     body_path '.zone /"/" | .[8] [:-2]'
+    end
+
+    output 'state' do
+	 body_path '.status'
+    end
+
+    output 'tags' do
+     body_path '.tags'
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/addAccessConfig.
-    action "addAccessConfig" do 
+    action "addAccessConfig" do
       verb "POST"
       path "$href/addAccessConfig"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/instances"
       type "instance"
-      output_path "items.*.instances[]"
+      output_path ".items | .[].instances // [] | .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/attachDisk.
-    action "attachDisk" do 
+    action "attachDisk" do
       verb "POST"
       path "$href/attachDisk"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/deleteAccessConfig.
-    action "deleteAccessConfig" do 
+    action "deleteAccessConfig" do
       verb "POST"
       path "$href/deleteAccessConfig"
       type "operation"
@@ -1761,99 +2067,113 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/detachDisk.
-    action "detachDisk" do 
+    action "detachDisk" do
       verb "POST"
       path "$href/detachDisk"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "instance"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/getSerialPortOutput.
-    action "getSerialPortOutput" do 
+    action "getSerialPortOutput" do
       verb "GET"
       path "$href/serialPort"
       type "serialPortOutput"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/zones/$zone/instances"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones/$zone/instances"
       type "instance"
       output_path "items"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'aggregatedList'
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/reset.
-    action "reset" do 
+    action "reset" do
       verb "POST"
       path "$href/reset"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/setDiskAutoDelete.
-    action "setDiskAutoDelete" do 
+    action "setDiskAutoDelete" do
       verb "POST"
       path "$href/setDiskAutoDelete"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/setMachineType.
-    action "setMachineType" do 
+    action "setMachineType" do
       verb "POST"
       path "$href/setMachineType"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/setMetadata.
-    action "setMetadata" do 
+    action "setMetadata" do
       verb "POST"
       path "$href/setMetadata"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/setScheduling.
-    action "setScheduling" do 
+    action "setScheduling" do
       verb "POST"
       path "$href/setScheduling"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/setTags.
-    action "setTags" do 
+    action "setTags" do
       verb "POST"
       path "$href/setTags"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/start.
-    action "start" do 
+    action "start" do
       verb "POST"
       path "$href/start"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/startWithEncryptionKey.
-    action "startWithEncryptionKey" do 
+    action "startWithEncryptionKey" do
       verb "POST"
       path "$href/startWithEncryptionKey"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/instances/stop.
-    action "stop" do 
+    action "stop" do
       verb "POST"
       path "$href/stop"
       type "operation"
@@ -1882,7 +2202,7 @@ plugin "gce" do
     output "chargesUseFee","kind","name","selfLink"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/licenses/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "license"
@@ -1901,7 +2221,7 @@ plugin "gce" do
     output "creationTimestamp","deprecated","description","guestCpus","id","imageSpaceGb","isSharedCpu","kind","maximumPersistentDisks","maximumPersistentDisksSizeGb","memoryMb","name","scratchDisks","selfLink","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/machineTypes/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/machineTypes"
       type "machineType"
@@ -1909,14 +2229,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/machineTypes/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "machineType"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/machineTypes/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones/$zone/machineTypes"
       type "machineType"
@@ -1931,7 +2251,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/networks.
   type "network" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}"
+    href_templates "{{.id}}","{{.items| .[].id}}"
 
     field "ipv4Range" do
       alias_for "IPv4Range"
@@ -1955,39 +2275,71 @@ plugin "gce" do
       type "string"
     end
 
-    output "IPv4Range","autoCreateSubnetworks","creationTimestamp","description","gatewayIPv4","id","kind","name","selfLink","subnetworks"
+    output "IPv4Range","autoCreateSubnetworks","creationTimestamp","description","gatewayIPv4","kind","selfLink","subnetworks"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+	  body_path '.selfLink /"/" | .[7]'
+    end
+
+    output 'state' do
+    end
+
+    output 'tags' do
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/networks/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/networks/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "network"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/networks/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/networks"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/networks/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/networks"
       type "network"
-      output_path "items"
+      output_path ".items | .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'list'
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/networks/switchToCustomMode.
-    action "switchToCustomMode" do 
+    action "switchToCustomMode" do
       verb "POST"
       path "$href/switchToCustomMode"
       type "operation"
@@ -2006,13 +2358,13 @@ plugin "gce" do
     output "clientOperationId","creationTimestamp","description","endTime","error","httpErrorMessage","httpErrorStatusCode","id","insertTime","kind","name","operationType","progress","region","selfLink","startTime","status","statusMessage","targetId","targetLink","user","warnings","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalOperations/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/globalOperations/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "operation"
@@ -2060,35 +2412,35 @@ plugin "gce" do
     output "commonInstanceMetadata","creationTimestamp","defaultServiceAccount","description","enabledFeatures","id","kind","name","quotas","selfLink","usageExportLocation"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/projects/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "project"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/projects/moveDisk.
-    action "moveDisk" do 
+    action "moveDisk" do
       verb "POST"
       path "$href/moveDisk"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/projects/moveInstance.
-    action "moveInstance" do 
+    action "moveInstance" do
       verb "POST"
       path "$href/moveInstance"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/projects/setCommonInstanceMetadata.
-    action "setCommonInstanceMetadata" do 
+    action "setCommonInstanceMetadata" do
       verb "POST"
       path "$href/setCommonInstanceMetadata"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/projects/setUsageExportBucket.
-    action "setUsageExportBucket" do 
+    action "setUsageExportBucket" do
       verb "POST"
       path "$href/setUsageExportBucket"
       type "operation"
@@ -2127,14 +2479,14 @@ plugin "gce" do
     output "autoscalingPolicy","creationTimestamp","description","id","kind","name","region","selfLink","target","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionAutoscalers/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/autoscalers"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionAutoscalers/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/autoscalers"
       type "regionAutoscalerList"
@@ -2223,14 +2575,14 @@ plugin "gce" do
     output "affinityCookieTtlSec","backends","connectionDraining","creationTimestamp","description","enableCDN","fingerprint","healthChecks","id","kind","loadBalancingScheme","name","port","portName","protocol","region","selfLink","sessionAffinity","timeoutSec"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionBackendServices/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/backendServices"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionBackendServices/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/backendServices"
       type "backendService"
@@ -2287,14 +2639,14 @@ plugin "gce" do
     output "baseInstanceName","creationTimestamp","currentActions","description","fingerprint","id","instanceGroup","instanceTemplate","kind","name","namedPorts","region","selfLink","targetPools","targetSize","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionInstanceGroupManagers/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/instanceGroupManagers"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionInstanceGroupManagers/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/instanceGroupManagers"
       type "regionInstanceGroupManagerList"
@@ -2355,14 +2707,14 @@ plugin "gce" do
     output "creationTimestamp","description","fingerprint","id","kind","name","namedPorts","network","region","selfLink","size","subnetwork","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionInstanceGroups/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/instanceGroups"
       type "regionInstanceGroupList"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionInstanceGroups/listInstances.
-    action "listInstances" do 
+    action "listInstances" do
       verb "POST"
       path "$href/listInstances"
       type "regionInstanceGroupsListInstances"
@@ -2399,7 +2751,7 @@ plugin "gce" do
     output "clientOperationId","creationTimestamp","description","endTime","error","httpErrorMessage","httpErrorStatusCode","id","insertTime","kind","name","operationType","progress","region","selfLink","startTime","status","statusMessage","targetId","targetLink","user","warnings","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regionOperations/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "$href/operations"
       type "operation"
@@ -2429,14 +2781,14 @@ plugin "gce" do
     output "creationTimestamp","deprecated","description","id","kind","name","quotas","selfLink","status","zones"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regions/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "region"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/regions/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions"
       type "region"
@@ -2488,7 +2840,7 @@ plugin "gce" do
     output "bgp","bgpPeers","creationTimestamp","description","id","interfaces","kind","name","network","region","selfLink"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routers/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/routers"
       type "router"
@@ -2496,28 +2848,28 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routers/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routers/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "router"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routers/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/routers"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routers/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/routers"
       type "router"
@@ -2525,14 +2877,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routers/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routers/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "$href"
       type "operation"
@@ -2599,28 +2951,28 @@ plugin "gce" do
     output "creationTimestamp","description","destRange","id","kind","name","network","nextHopGateway","nextHopInstance","nextHopIp","nextHopNetwork","nextHopVpnTunnel","priority","selfLink","tags","warnings"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routes/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routes/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "route"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routes/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/routes"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/routes/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/routes"
       type "route"
@@ -2640,7 +2992,7 @@ plugin "gce" do
 
   # This resource was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/snapshots.
   type "snapshot" do
-    href_templates "{{selfLink}}","{{items[*].selfLink}}"
+    href_templates "{{.id}}","{{.items| .[].id}}"
 
     field "description" do
       type "string"
@@ -2658,28 +3010,61 @@ plugin "gce" do
       type "object"
     end
 
-    output "creationTimestamp","description","diskSizeGb","id","kind","licenses","name","selfLink","snapshotEncryptionKey","sourceDisk","sourceDiskEncryptionKey","sourceDiskId","status","storageBytes","storageBytesStatus"
+    output "creationTimestamp","description","diskSizeGb","kind","licenses","selfLink","snapshotEncryptionKey","sourceDisk","sourceDiskEncryptionKey","sourceDiskId","storageBytes","storageBytesStatus"
+
+    output 'id' do
+     body_path '.id'
+    end
+
+    output 'name' do
+	  body_path '.name'
+    end
+
+    output 'region' do
+	  body_path '.selfLink /"/" | .[7]'
+    end
+
+    output 'state' do
+	 body_path '.status'
+    end
+
+    output 'tags' do
+    end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/snapshots/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/snapshots/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "snapshot"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/snapshots/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/snapshots"
       type "snapshot"
-      output_path "items"
+      output_path ".items| .[]"
+      field "page_size" do
+          type 'string'
+          location 'query'
+          alias_for 'maxResults'
+      end
+      pagination $google_pagination
+    end
+
+    polling do
+      field_values do
+      page_size $page_size
+    end
+      period 60
+      action 'list'
     end
 
     provision "no_operation"
@@ -2715,28 +3100,28 @@ plugin "gce" do
     output "certificate","creationTimestamp","description","id","kind","name","privateKey","selfLink"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/sslCertificates/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/sslCertificates/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "sslCertificate"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/sslCertificates/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/sslCertificates"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/sslCertificates/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/sslCertificates"
       type "sslCertificate"
@@ -2778,7 +3163,7 @@ plugin "gce" do
     output "creationTimestamp","description","gatewayAddress","id","ipCidrRange","kind","name","network","region","selfLink"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/subnetworks/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/subnetworks"
       type "subnetwork"
@@ -2786,35 +3171,35 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/subnetworks/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/subnetworks/expandIpCidrRange.
-    action "expandIpCidrRange" do 
+    action "expandIpCidrRange" do
       verb "POST"
       path "$href/expandIpCidrRange"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/subnetworks/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "subnetwork"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/subnetworks/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/subnetworks"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/subnetworks/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/subnetworks"
       type "subnetwork"
@@ -2856,28 +3241,28 @@ plugin "gce" do
     output "creationTimestamp","description","id","kind","name","selfLink","urlMap"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpProxies/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpProxies/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "targetHttpProxy"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpProxies/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/targetHttpProxies"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpProxies/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/targetHttpProxies"
       type "targetHttpProxy"
@@ -2885,7 +3270,7 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpProxies/setUrlMap.
-    action "setUrlMap" do 
+    action "setUrlMap" do
       verb "POST"
       path "$href/setUrlMap"
       type "operation"
@@ -2920,28 +3305,28 @@ plugin "gce" do
     output "creationTimestamp","description","id","kind","name","selfLink","sslCertificates","urlMap"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpsProxies/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpsProxies/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "targetHttpsProxy"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpsProxies/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/targetHttpsProxies"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpsProxies/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/targetHttpsProxies"
       type "targetHttpsProxy"
@@ -2949,14 +3334,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpsProxies/setSslCertificates.
-    action "setSslCertificates" do 
+    action "setSslCertificates" do
       verb "POST"
       path "$href/setSslCertificates"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetHttpsProxies/setUrlMap.
-    action "setUrlMap" do 
+    action "setUrlMap" do
       verb "POST"
       path "$href/setUrlMap"
       type "operation"
@@ -2997,7 +3382,7 @@ plugin "gce" do
     output "creationTimestamp","description","id","instance","kind","name","natPolicy","selfLink","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetInstances/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/targetInstances"
       type "targetInstance"
@@ -3005,28 +3390,28 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetInstances/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetInstances/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "targetInstance"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetInstances/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/zones/$zone/targetInstances"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetInstances/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones/$zone/targetInstances"
       type "targetInstance"
@@ -3085,21 +3470,21 @@ plugin "gce" do
     output "backupPool","creationTimestamp","description","failoverRatio","healthChecks","id","instances","kind","name","region","selfLink","sessionAffinity"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/addHealthCheck.
-    action "addHealthCheck" do 
+    action "addHealthCheck" do
       verb "POST"
       path "$href/addHealthCheck"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/addInstance.
-    action "addInstance" do 
+    action "addInstance" do
       verb "POST"
       path "$href/addInstance"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/targetPools"
       type "targetPool"
@@ -3107,35 +3492,35 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "targetPool"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/getHealth.
-    action "getHealth" do 
+    action "getHealth" do
       verb "POST"
       path "$href/getHealth"
       type "targetPoolInstanceHealth"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/targetPools"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/targetPools"
       type "targetPool"
@@ -3143,21 +3528,21 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/removeHealthCheck.
-    action "removeHealthCheck" do 
+    action "removeHealthCheck" do
       verb "POST"
       path "$href/removeHealthCheck"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/removeInstance.
-    action "removeInstance" do 
+    action "removeInstance" do
       verb "POST"
       path "$href/removeInstance"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetPools/setBackup.
-    action "setBackup" do 
+    action "setBackup" do
       verb "POST"
       path "$href/setBackup"
       type "operation"
@@ -3201,28 +3586,28 @@ plugin "gce" do
     output "creationTimestamp","description","id","kind","name","proxyHeader","selfLink","service","sslCertificates"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetSslProxies/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetSslProxies/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "targetSslProxy"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetSslProxies/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/targetSslProxies"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetSslProxies/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/targetSslProxies"
       type "targetSslProxy"
@@ -3230,21 +3615,21 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetSslProxies/setBackendService.
-    action "setBackendService" do 
+    action "setBackendService" do
       verb "POST"
       path "$href/setBackendService"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetSslProxies/setProxyHeader.
-    action "setProxyHeader" do 
+    action "setProxyHeader" do
       verb "POST"
       path "$href/setProxyHeader"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetSslProxies/setSslCertificates.
-    action "setSslCertificates" do 
+    action "setSslCertificates" do
       verb "POST"
       path "$href/setSslCertificates"
       type "operation"
@@ -3283,7 +3668,7 @@ plugin "gce" do
     output "creationTimestamp","description","forwardingRules","id","kind","name","network","region","selfLink","status","tunnels"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetVpnGateways/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/targetVpnGateways"
       type "targetVpnGateway"
@@ -3291,28 +3676,28 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetVpnGateways/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetVpnGateways/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "targetVpnGateway"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetVpnGateways/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/targetVpnGateways"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/targetVpnGateways/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/targetVpnGateways"
       type "targetVpnGateway"
@@ -3370,35 +3755,35 @@ plugin "gce" do
     output "creationTimestamp","defaultService","description","fingerprint","hostRules","id","kind","name","pathMatchers","selfLink","tests"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/urlMaps/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/urlMaps/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "urlMap"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/urlMaps/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/global/urlMaps"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/urlMaps/invalidateCache.
-    action "invalidateCache" do 
+    action "invalidateCache" do
       verb "POST"
       path "$href/invalidateCache"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/urlMaps/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/global/urlMaps"
       type "urlMap"
@@ -3406,14 +3791,14 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/urlMaps/patch.
-    action "patch" do 
+    action "patch" do
       verb "PATCH"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/urlMaps/update.
-    action "update" do 
+    action "update" do
       verb "PUT"
       path "$href"
       type "operation"
@@ -3480,7 +3865,7 @@ plugin "gce" do
     output "creationTimestamp","description","detailedStatus","id","ikeVersion","kind","localTrafficSelector","name","peerIp","region","remoteTrafficSelector","router","selfLink","sharedSecret","sharedSecretHash","status","targetVpnGateway"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/vpnTunnels/aggregatedList.
-    action "aggregatedList" do 
+    action "aggregatedList" do
       verb "GET"
       path "/projects/$project/aggregated/vpnTunnels"
       type "vpnTunnel"
@@ -3488,28 +3873,28 @@ plugin "gce" do
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/vpnTunnels/delete.
-    action "delete" do 
+    action "delete" do
       verb "DELETE"
       path "$href"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/vpnTunnels/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "vpnTunnel"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/vpnTunnels/insert.
-    action "insert" do 
+    action "insert" do
       verb "POST"
       path "/projects/$project/regions/$region/vpnTunnels"
       type "operation"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/vpnTunnels/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/regions/$region/vpnTunnels"
       type "vpnTunnel"
@@ -3539,7 +3924,7 @@ plugin "gce" do
     output "clientOperationId","creationTimestamp","description","endTime","error","httpErrorMessage","httpErrorStatusCode","id","insertTime","kind","name","operationType","progress","region","selfLink","startTime","status","statusMessage","targetId","targetLink","user","warnings","zone"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/zoneOperations/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "$href/operations"
       type "operation"
@@ -3569,14 +3954,14 @@ plugin "gce" do
     output "creationTimestamp","deprecated","description","id","kind","name","region","selfLink","status"
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/zones/get.
-    action "get" do 
+    action "get" do
       verb "GET"
       path "$href"
       type "zone"
     end
 
     # This action was generated using the documentation from https://cloud.google.com/compute/docs/reference/latest/zones/list.
-    action "list" do 
+    action "list" do
       verb "GET"
       path "/projects/$project/zones"
       type "zone"
@@ -3647,21 +4032,3 @@ define stop_debugging() do
     $$debugging = false
   end
 end
-resource_pool "gce" do
-  plugin $gce
-  parameter_values do
-    project $gce_project
-  end
-  auth "my_google_auth", type: "oauth2" do
-    token_url "https://www.googleapis.com/oauth2/v4/token"
-    grant type: "jwt_bearer" do
-      iss cred("GCE_PLUGIN_ACCOUNT")
-      aud "https://www.googleapis.com/oauth2/v4/token"
-      additional_claims do {
-        "scope" => "https://www.googleapis.com/auth/compute"
-      } end
-      signing_key cred("GCE_PLUGIN_PRIVATE_KEY")
-    end
-  end
-end
-
