@@ -1,9 +1,9 @@
-name 'rs_azure_networking_plugin'
+name 'rs_azure_china_networking_plugin'
 type 'plugin'
 rs_ca_ver 20161221
 short_description "Azure Networking Plugin"
 long_description "Version: 1.5"
-package "plugins/rs_azure_networking"
+package "plugins/azure_china_networking"
 import "sys_log"
 
 parameter "tenant_id" do
@@ -23,7 +23,7 @@ end
 
 plugin "rs_azure_networking" do
   endpoint do
-    default_host "https://management.azure.com/"
+    default_host "https://management.chinacloudapi.cn"
     default_scheme "https"
     query do {
       'api-version' =>  '2018-11-01'
@@ -80,6 +80,12 @@ plugin "rs_azure_networking" do
       type "interface"
       path "$href"
       verb "PUT"
+    end
+
+    action "patch" do
+      type "interface"
+      path "$href"
+      verb "PATCH"
     end
 
     action "show" do
@@ -617,7 +623,7 @@ end
 
 plugin "rs_azure_lb" do
   endpoint do
-    default_host "https://management.azure.com/"
+    default_host "https://management.chinacloudapi.cn"
     default_scheme "https"
     query do {
       'api-version' =>  '2016-09-01'
@@ -757,12 +763,12 @@ resource_pool "rs_azure_networking" do
     end
 
     auth "azure_auth", type: "oauth2" do
-      token_url join(["https://login.microsoftonline.com/",$tenant_id,"/oauth2/token"])
+      token_url join(["https://login.chinacloudapi.cn/",$tenant_id,"/oauth2/token"])
       grant type: "client_credentials" do
-        client_id cred("AZURE_APPLICATION_ID")
-        client_secret cred("AZURE_APPLICATION_KEY")
+        client_id cred("AZURE_CHINA_APPLICATION_ID")
+        client_secret cred("AZURE_CHINA_APPLICATION_KEY")
         additional_params do {
-          "resource" => "https://management.azure.com/"
+          "resource" => "https://management.chinacloudapi.cn"
         } end
       end
     end
@@ -775,12 +781,12 @@ resource_pool "rs_azure_lb" do
     end
 
     auth "azure_auth", type: "oauth2" do
-      token_url join(["https://login.microsoftonline.com/",$tenant_id,"/oauth2/token"])
+      token_url join(["https://login.chinacloudapi.cn/",$tenant_id,"/oauth2/token"])
       grant type: "client_credentials" do
-        client_id cred("AZURE_APPLICATION_ID")
-        client_secret cred("AZURE_APPLICATION_KEY")
+        client_id cred("AZURE_CHINA_APPLICATION_ID")
+        client_secret cred("AZURE_CHINA_APPLICATION_KEY")
         additional_params do {
-          "resource" => "https://management.azure.com/"
+          "resource" => "https://management.chinacloudapi.cn"
         } end
       end
     end
