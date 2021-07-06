@@ -1,5 +1,9 @@
 # changelog
 
+## v2.1.0
+
+- Supporting copies, cleaning up provision.
+
 ## v2.0
 
 - Adding new syntax for resource browser

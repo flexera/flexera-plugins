@@ -30,7 +30,7 @@ plugin "aws_compute" do
 
   short_description 'AWS-EC2 plugin'
   long_description 'Supports AWS EC2'
-  version '2.0.0'
+  version '2.1.0'
 
   documentation_link 'source' do
     label 'Source'
@@ -57,15 +57,15 @@ plugin "aws_compute" do
     description 'The maximum results count for each page of AWS data received.'
   end
 
-    endpoint do
-        default_host 'ec2.$region.amazonaws.com'
-        default_scheme 'https'
-        path '/'
-        query do {
-        'Version' => '2016-11-15'
-        } end
-        request_content_type 'application/x-www-form-urlencoded; charset=utf-8'
-    end
+  endpoint do
+      default_host 'ec2.$region.amazonaws.com'
+      default_scheme 'https'
+      path '/'
+      query do {
+      'Version' => '2016-11-15'
+      } end
+      request_content_type 'application/x-www-form-urlencoded; charset=utf-8'
+  end
 
   type "vpc" do
     # HREF is set to the correct template in the provision definition due to a lack of usable fields in the response to build the href
@@ -460,9 +460,9 @@ plugin "aws_compute" do
   end
 
   type "addresses" do
-    href_templates "/?Action=DescribeAddresses&AllocationId.1={{//DescribeAddressesResponse/addressesSet/item/allocationId}}"
-    provision 'no_operation'
-    delete    'no_operation'
+    href_templates "/?Action=DescribeAddresses&AllocationId.1={{//DescribeAddressesResponse/addressesSet/item/allocationId}}","/?Action=DescribeAddresses&AllocationId.1={{//AllocateAddressResponse/allocationId}}"
+    provision 'provision_resources_no_check'
+    delete    'delete_resource'
 
     field "allocation_id_1" do
       alias_for "AllocationId.1"
@@ -541,7 +541,7 @@ plugin "aws_compute" do
 
   type "tags" do
     href_templates "/?Action=DescribeTags&Filter.1.Name=key&Filter.1.Value={{//DescribeTagsResponse/tagSet/item/key}}&Filter.2.Name=value&Filter.2.Value={{//DescribeTagsResponse/tagSet/item/value}}&Filter.3.Name=resource-id&Filter.3.Value.1={{//DescribeTagsResponse/tagSet/item/resourceId}}","/?Action=DescribeTags&Filter.1.Name=key&Filter.1.Value=$tag_1_key&Filter.2.Name=value&Filter.2.Value=$tag_1_value&Filter.3.Name=resource-id&Filter.3.Value.1=$resource_id_1"
-    provision 'provision_tags'
+    provision 'provision_resources_no_check'
     delete    'delete_resource'
 
     field "resource_id_1" do
@@ -1421,8 +1421,8 @@ plugin "aws_compute" do
 
   type "snapshots" do
     href_templates "/?Action=DescribeSnapshots&SnapshotId.1={{//DescribeSnapshotsResponse/snapshotSet/item/snapshotId}}"
-    provision 'no_operation'
-    delete    'no_operation'
+    provision 'provision_resource_available_state'
+    delete    'delete_resource'
 
     action "get" do
       verb "POST"
@@ -1564,8 +1564,8 @@ plugin "aws_compute" do
 
   type "subnets" do
     href_templates "/?Action=DescribeSubnets&subnetId.1={{//DescribeSubnetsResponse/subnetSet/item/subnetId}}","/?Action=DescribeSubnets&subnetId.1={{//CreateSubnetResponse/subnetId}}"
-    provision 'no_operation'
-    delete    'no_operation'
+    provision 'provision_resource_available_state'
+    delete    'delete_resource'
 
     action "list" do
       verb "POST"
@@ -1613,8 +1613,8 @@ plugin "aws_compute" do
 
   type "security_groups" do
     href_templates "/?Action=DescribeSecurityGroups&groupId.1={{//DescribeSecurityGroupsResponse/securityGroupInfo/item/groupId}}","/?Action=DescribeSecurityGroups&groupId.1={{//CreateImageResponse/groupId}}"
-    provision 'no_operation'
-    delete    'no_operation'
+    provision 'provision_resource_available_state'
+    delete    'delete_resource'
 
     action "list" do
       verb "POST"
@@ -1668,63 +1668,86 @@ resource_pool "compute_pool" do
   end
 end
 
-define provision_resource_available_state(@declaration) return @resource do
-  sub on_error: stop_debugging() do
-    $object = to_object(@declaration)
-    $fields = $object["fields"]
-    $type = $object["type"]
-    $name = $fields['name']
-    call start_debugging()
-    @resource = aws_compute.$type.create($fields)
-    call stop_debugging()
-    $resource = to_object(@resource)
-    call sys_log.detail(join([$type, ": ", to_s($resource)]))
-    $state = @resource.state
-    while $state != "available" do
-      sleep(10)
-      call sys_log.detail(join(["state: ", $state]))
+define provision_resources_no_check(@declaration) return @resources do
+  $object = to_object(@declaration)
+  $fields = $object["fields"]
+  $name = $fields['name']
+  $type = $object["type"]
+  $counter = 1
+  $copies = $object["copies"]
+  @resources = aws_compute.$type.empty()
+  while $counter <= $copies do
+    sub on_error: stop_debugging() do
       call start_debugging()
+      @resource = aws_compute.$type.create($fields)
+      call stop_debugging()
+      $object = to_object(@resource)
+      call sys_log.detail(join([$type, ":", to_s($object)]))
+      @resources = @resources + @resource
+      $counter = $counter + 1
+    end
+  end
+end
+
+define provision_resource_available_state(@declaration) return @resources do
+  $object = to_object(@declaration)
+  $fields = $object["fields"]
+  $type = $object["type"]
+  $name = $fields['name']
+  $counter = 1
+  $copies = $object["copies"]
+  @resources = aws_compute.$type.empty()
+  while $counter <= $copies do
+    sub on_error: stop_debugging() do
+      call start_debugging()
+      @resource = aws_compute.$type.create($fields)
+      call stop_debugging()
+      $resource = to_object(@resource)
+      call sys_log.detail(join([$type, ": ", to_s($resource)]))
       $state = @resource.state
-      call stop_debugging()
+      while $state != "available" do
+        sleep(10)
+        call sys_log.detail(join(["state: ", $state]))
+        call start_debugging()
+        $state = @resource.state
+        call stop_debugging()
+      end
+      @resources = @resources + @resource
+      $counter = $counter + 1
     end
   end
 end
 
-define provision_instance(@declaration) return @resource do
-  sub on_error: stop_debugging() do
-    $object = to_object(@declaration)
-    $fields = $object["fields"]
-    $type = $object["type"]
-    $name = $fields['name']
-    call start_debugging()
-    @resource = aws_compute.$type.create($fields)
-    call stop_debugging()
-    $resource = to_object(@resource)
-    call sys_log.detail(join([$type, ": ", to_s($resource)]))
-    @created_resource = aws_compute.$type.show(instance_id: @resource.id)
-    @resource = @created_resource
-    $state = @resource.instance_state
-    while $state != "running" do
-      sleep(10)
-      call sys_log.detail(join(["state: ", $state]))
+define provision_instance(@declaration) return @resources do
+  $object = to_object(@declaration)
+  call sys_log.detail(to_s($object))
+  $fields = $object["fields"]
+  $type = $object["type"]
+  $name = $fields['name']
+  $counter = 1
+  $copies = $object["copies"]
+  call sys_log.detail(join(["copies: ", $copies]))
+  @resources = aws_compute.$type.empty()
+  while $counter <= $copies do
+    sub on_error: stop_debugging() do
       call start_debugging()
-      $state = @resource.instance_state
+      @resource = aws_compute.$type.create($fields)
       call stop_debugging()
-      call sys_log.detail(join(["instance_state",@instance.instance_state]))
+      $resource = to_object(@resource)
+      call sys_log.detail(join([$type, ": ", to_s($resource)]))
+      @created_resource = aws_compute.$type.show(instance_id: @resource.id)
+      @resource = @created_resource
+      $state = @resource.instance_state
+      while $state != "running" do
+        sleep(10)
+        call sys_log.detail(join(["state: ", $state]))
+        call start_debugging()
+        $state = @resource.instance_state
+        call stop_debugging()
+      end
+      @resources = @resources + @resource
+      $counter = $counter + 1
     end
-  end
-end
-
-define provision_tags(@declaration) return @resource do
-  sub on_error: stop_debugging() do
-    $object = to_object(@declaration)
-    $fields = $object["fields"]
-    $name = $fields['name']
-    call start_debugging()
-    @resource = aws_compute.tags.create($fields)
-    call stop_debugging()
-    $vpc = to_object(@resource)
-    call sys_log.detail(join(["tags:", to_s($vpc)]))
   end
 end
 
@@ -1751,38 +1774,44 @@ define provision_volume_modification(@declaration) return @resource do
   end
 end
 
-define delete_resource(@resource) do
-  sub on_error: stop_debugging() do
-    call start_debugging()
-    @resource.destroy()
-    sleep(30)
-    call stop_debugging()
-  end
-end
-
-define delete_instance(@resource) do
-  sub on_error: stop_debugging() do
-    call start_debugging()
-    @resource.destroy(instance_id: @resource.id)
-    sleep(30)
-    call stop_debugging()
-  end
-end
-
-define delete_nat_gateway(@nat_gateway) do
-  sub on_error: stop_debugging() do
-    call start_debugging()
-    @nat_gateway.destroy()
-    sleep(30)
-    $state = @nat_gateway.state
-    while $state != "deleted" do
-      sleep(10)
-      call sys_log.detail(join(["state: ", $state]))
+define delete_resource(@resources) do
+  foreach @resource in @resources do
+    sub on_error: stop_debugging() do
       call start_debugging()
-      $state = @nat_gateway.state
+      @resource.destroy()
+      sleep(30)
       call stop_debugging()
     end
-    call stop_debugging()
+  end
+end
+
+define delete_instance(@resources) do
+  foreach @resource in @resources do
+    sub on_error: stop_debugging() do
+      call start_debugging()
+      @resource.destroy(instance_id: @resource.id)
+      sleep(30)
+      call stop_debugging()
+    end
+  end
+end
+
+define delete_nat_gateway(@nat_gateways) do
+  foreach @nat_gateway in @nat_gateways do
+    sub on_error: stop_debugging() do
+      call start_debugging()
+      @nat_gateway.destroy()
+      sleep(30)
+      $state = @nat_gateway.state
+      while $state != "deleted" do
+        sleep(10)
+        call sys_log.detail(join(["state: ", $state]))
+        call start_debugging()
+        $state = @nat_gateway.state
+        call stop_debugging()
+      end
+      call stop_debugging()
+    end
   end
 end
 
