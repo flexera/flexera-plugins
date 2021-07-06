@@ -47,6 +47,7 @@ This repository contains the library of open source Flexera CMP plugins.
 - [GCP Bigtable](./google/google_bigtable/)
 - [GKE](./google/gke/)
 - [Google Deployment Manager](./google/google_deployment_manager/)
+- [Google Cloud Storage](./google/google_cloud_storage/)
 
 ### Fastly
 
